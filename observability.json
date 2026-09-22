@@ -15,8 +15,8 @@
       "story": "JACTIV-737"
     },
     "Architecture": {
-      "status": "in-review",
-      "updatedAt": "2026-09-22T23:58:32Z",
+      "status": "done",
+      "updatedAt": "2026-09-22T23:58:47Z",
       "task": "Determining architecture",
       "run": 35799550832,
       "decidedBy": "auto",
