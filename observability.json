@@ -15,10 +15,13 @@
       "story": "JACTIV-737"
     },
     "Architecture": {
-      "status": "in-progress",
-      "updatedAt": "2026-09-22T23:53:42Z",
+      "status": "in-review",
+      "updatedAt": "2026-09-22T23:58:32Z",
       "task": "Determining architecture",
-      "run": 35799550832
+      "run": 35799550832,
+      "decidedBy": "auto",
+      "pr": 2,
+      "prUrl": "https://github.com/irina-capatina-org/jactiv-737-no-po-invoice-chaser/pull/2"
     },
     "Development": {
       "status": "todo",
