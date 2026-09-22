@@ -15,8 +15,9 @@
       "story": "JACTIV-737"
     },
     "Architecture": {
-      "status": "todo",
-      "updatedAt": null
+      "status": "in-progress",
+      "updatedAt": "2026-09-22T23:53:31Z",
+      "task": "Designing the solution"
     },
     "Development": {
       "status": "todo",
