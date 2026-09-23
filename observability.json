@@ -46,8 +46,10 @@
       "run": 35801434678
     },
     "Production": {
-      "status": "todo",
-      "updatedAt": null
+      "status": "in-review",
+      "updatedAt": "2026-09-23T00:22:54Z",
+      "decidedBy": "human",
+      "task": "Release PR open for approval"
     }
   },
   "documents": {
