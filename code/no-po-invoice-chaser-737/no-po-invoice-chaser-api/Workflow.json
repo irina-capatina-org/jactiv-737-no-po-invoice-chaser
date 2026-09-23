@@ -1,0 +1,612 @@
+{
+  "document": {
+    "dsl": "1.0.0",
+    "name": "Workflow",
+    "tags": {
+      "projectId": "70d2a0be-eaa3-482f-87d1-03c50355fcd4"
+    },
+    "version": "0.0.1",
+    "namespace": "default",
+    "metadata": {
+      "variables": {
+        "schema": {
+          "format": "json",
+          "document": {
+            "type": "object",
+            "properties": {
+              "windowStart": { "type": "string", "default": "" },
+              "windowEnd": { "type": "string", "default": "" },
+              "runDate": { "type": "string", "default": "" },
+              "filteredInvoices": { "type": "array", "default": [] },
+              "qualifyingInvoices": { "type": "array", "default": [] },
+              "qualifyingCount": { "type": "number", "default": 0 },
+              "coupaUrl": { "type": "string", "default": "" },
+              "errorMessage": { "type": "string", "default": "" }
+            },
+            "title": "Variables"
+          }
+        }
+      }
+    }
+  },
+  "input": {
+    "schema": {
+      "format": "json",
+      "document": {
+        "type": "object",
+        "properties": {},
+        "title": "Inputs"
+      }
+    }
+  },
+  "output": {
+    "schema": {
+      "format": "json",
+      "document": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string" },
+          "invoice_count": { "type": "number" },
+          "slack_sent": { "type": "boolean" },
+          "error_message": { "type": "string" }
+        },
+        "title": "Outputs"
+      }
+    }
+  },
+  "do": [
+    {
+      "Sequence_1": {
+        "do": [
+          {
+            "WorkflowStart": {
+              "set": "${ { ...Object.entries($workflow.definition?.document?.metadata?.variables?.schema?.document?.properties || {}).reduce((acc, [name, def]) => ({ ...acc, [name]: def?.default }), {}), ...($workflow.input || {}) } }",
+              "output": {
+                "as": "${$input}"
+              },
+              "export": {
+                "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+              },
+              "metadata": {
+                "activityType": "Assign",
+                "displayName": "Workflow start",
+                "fullName": "Assign",
+                "isTransparent": true
+              }
+            }
+          },
+          {
+            "Try_Catch_1": {
+              "try": [
+                {
+                  "Javascript_DateWindow": {
+                    "run": {
+                      "script": {
+                        "language": "javascript",
+                        "code": "const now = new Date(); const pad = (n) => String(n).padStart(2, '0'); const fmt = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); const windowEndDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const windowStartDate = new Date(windowEndDate); windowStartDate.setDate(windowStartDate.getDate() - 7); return { windowStart: fmt(windowStartDate), windowEnd: fmt(windowEndDate), runDate: fmt(windowEndDate) };",
+                        "arguments": "${{ \"$context\": $context, \"$workflow\": $workflow, \"$input\": $input }}"
+                      }
+                    },
+                    "export": {
+                      "as": "{ ...$context, outputs: { ...$context?.outputs, \"Javascript_DateWindow\": $output } }"
+                    },
+                    "metadata": {
+                      "activityType": "JsInvoke",
+                      "displayName": "Compute Date Window",
+                      "fullName": "JsInvoke"
+                    }
+                  }
+                },
+                {
+                  "Assign_WindowStart": {
+                    "set": { "windowStart": "${$context.outputs.Javascript_DateWindow.windowStart}" },
+                    "export": {
+                      "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+                    },
+                    "metadata": {
+                      "activityType": "Assign",
+                      "displayName": "Set windowStart",
+                      "fullName": "Assign",
+                      "isTransparent": false
+                    }
+                  }
+                },
+                {
+                  "Assign_WindowEnd": {
+                    "set": { "windowEnd": "${$context.outputs.Javascript_DateWindow.windowEnd}" },
+                    "export": {
+                      "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+                    },
+                    "metadata": {
+                      "activityType": "Assign",
+                      "displayName": "Set windowEnd",
+                      "fullName": "Assign",
+                      "isTransparent": false
+                    }
+                  }
+                },
+                {
+                  "Assign_RunDate": {
+                    "set": { "runDate": "${$context.outputs.Javascript_DateWindow.runDate}" },
+                    "export": {
+                      "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+                    },
+                    "metadata": {
+                      "activityType": "Assign",
+                      "displayName": "Set runDate",
+                      "fullName": "Assign",
+                      "isTransparent": false
+                    }
+                  }
+                },
+                {
+                  "HTTP_Request_Coupa": {
+                    "call": "UiPath.Http",
+                    "with": {
+                      "connector": "uipath-uipath-http",
+                      "connectionId": "5fadfc73-a372-46ae-a27c-2481741eed07",
+                      "connectionResourceId": "5fadfc73-a372-46ae-a27c-2481741eed07",
+                      "method": "POST",
+                      "endpoint": "/http-request",
+                      "bodyParameters": {
+                        "authentication": "connector",
+                        "targetConnector": "uipath-coupa-coupa",
+                        "connection": "5fadfc73-a372-46ae-a27c-2481741eed07",
+                        "method": "GET",
+                        "path": "invoices",
+                        "url": "invoices",
+                        "query": {
+                          "status[in]": "draft,new",
+                          "invoice-date[gt_or_eq]": "${$context.variables.windowStart}",
+                          "invoice-date[lt_or_eq]": "${$context.variables.windowEnd}",
+                          "order_by": "invoice-date",
+                          "dir": "desc",
+                          "limit": "50"
+                        }
+                      }
+                    },
+                    "export": {
+                      "as": "{ ...$context, outputs: { ...$context?.outputs, \"HTTP_Request_Coupa\": $output } }"
+                    },
+                    "metadata": {
+                      "activityType": "Connector",
+                      "displayName": "HTTP Request: Coupa",
+                      "uiPathActivityTypeId": "5c4cc855-b42a-37e6-b910-de8588998fce",
+                      "configuration": "{\"essentialConfiguration\":{\"connectorVersion\":\"1.4.44\",\"scriptRef\":null,\"customFieldsRequestDetails\":null,\"instanceParameters\":{\"connectorKey\":\"uipath-uipath-http\",\"objectName\":\"http-request\",\"httpMethod\":\"POST\",\"activityType\":\"Curated\",\"version\":\"1.0.0\",\"supportsStreaming\":false,\"subType\":\"method\"},\"objectName\":\"http-request\",\"operation\":\"create\",\"packageVersion\":\"1.0.0\",\"httpMethod\":\"POST\",\"path\":\"/http-request\",\"unifiedTypesCompatible\":true,\"savedJitInputFieldId\":\"in_http-request\"}}"
+                    }
+                  }
+                },
+                {
+                  "If_CoupaValid#Wrapper": {
+                    "do": [
+                      {
+                        "If_CoupaValid": {
+                          "switch": [
+                            {
+                              "case": {
+                                "when": "${$context.outputs.HTTP_Request_Coupa.statusCode === 200 && Array.isArray($context.outputs.HTTP_Request_Coupa.content)}",
+                                "then": "If_CoupaValid#Then"
+                              }
+                            },
+                            {
+                              "default": {
+                                "then": "If_CoupaValid#Else"
+                              }
+                            }
+                          ],
+                          "metadata": {
+                            "displayName": "Coupa response valid?"
+                          }
+                        }
+                      },
+                      {
+                        "If_CoupaValid#Then": {
+                          "do": [
+                            {
+                              "Javascript_Filter": {
+                                "run": {
+                                  "script": {
+                                    "language": "javascript",
+                                    "code": "const invoices = $context.outputs.HTTP_Request_Coupa.content; const filtered = invoices.filter(inv => { if (inv['is-credit-note'] === true) return false; const status = (inv['status'] || '').toLowerCase(); if (status !== 'draft' && status !== 'new') return false; return true; }); return { filteredInvoices: filtered };",
+                                    "arguments": "${{ \"$context\": $context, \"$workflow\": $workflow, \"$input\": $input }}"
+                                  }
+                                },
+                                "export": {
+                                  "as": "{ ...$context, outputs: { ...$context?.outputs, \"Javascript_Filter\": $output } }"
+                                },
+                                "metadata": {
+                                  "activityType": "JsInvoke",
+                                  "displayName": "Filter Invoices",
+                                  "fullName": "JsInvoke"
+                                }
+                              }
+                            },
+                            {
+                              "Assign_FilteredInvoices": {
+                                "set": { "filteredInvoices": "${$context.outputs.Javascript_Filter.filteredInvoices}" },
+                                "export": {
+                                  "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+                                },
+                                "metadata": {
+                                  "activityType": "Assign",
+                                  "displayName": "Set filteredInvoices",
+                                  "fullName": "Assign",
+                                  "isTransparent": false
+                                }
+                              }
+                            },
+                            {
+                              "Javascript_POLinkage": {
+                                "run": {
+                                  "script": {
+                                    "language": "javascript",
+                                    "code": "const invoices = $context.variables.filteredInvoices; const descOnlyPattern = /^[a-zA-Z\\s\\-\\/,\\.]+$/; const qualifying = invoices.filter(inv => { const lines = inv['invoice-lines'] || []; if (lines.length === 0) return true; return lines.some(line => { const poNumber = (line['po-number'] || '').toString().trim(); const orderHeaderNum = (line['order-header-num'] || '').toString().trim(); const hasPoNumber = poNumber.length > 0 && !descOnlyPattern.test(poNumber); const hasOrderHeaderNum = orderHeaderNum.length > 0 && !descOnlyPattern.test(orderHeaderNum); return !hasPoNumber && !hasOrderHeaderNum; }); }); return { qualifyingInvoices: qualifying };",
+                                    "arguments": "${{ \"$context\": $context, \"$workflow\": $workflow, \"$input\": $input }}"
+                                  }
+                                },
+                                "export": {
+                                  "as": "{ ...$context, outputs: { ...$context?.outputs, \"Javascript_POLinkage\": $output } }"
+                                },
+                                "metadata": {
+                                  "activityType": "JsInvoke",
+                                  "displayName": "Evaluate PO Linkage",
+                                  "fullName": "JsInvoke"
+                                }
+                              }
+                            },
+                            {
+                              "Assign_QualifyingInvoices": {
+                                "set": { "qualifyingInvoices": "${$context.outputs.Javascript_POLinkage.qualifyingInvoices}" },
+                                "export": {
+                                  "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+                                },
+                                "metadata": {
+                                  "activityType": "Assign",
+                                  "displayName": "Set qualifyingInvoices",
+                                  "fullName": "Assign",
+                                  "isTransparent": false
+                                }
+                              }
+                            },
+                            {
+                              "Assign_QualifyingCount": {
+                                "set": { "qualifyingCount": "${$context.variables.qualifyingInvoices.length}" },
+                                "export": {
+                                  "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+                                },
+                                "metadata": {
+                                  "activityType": "Assign",
+                                  "displayName": "Set qualifyingCount",
+                                  "fullName": "Assign",
+                                  "isTransparent": false
+                                }
+                              }
+                            },
+                            {
+                              "If_CountGtZero#Wrapper": {
+                                "do": [
+                                  {
+                                    "If_CountGtZero": {
+                                      "switch": [
+                                        {
+                                          "case": {
+                                            "when": "${$context.variables.qualifyingCount > 0}",
+                                            "then": "If_CountGtZero#Then"
+                                          }
+                                        },
+                                        {
+                                          "default": {
+                                            "then": "If_CountGtZero#Else"
+                                          }
+                                        }
+                                      ],
+                                      "metadata": {
+                                        "displayName": "Count > 0?"
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "If_CountGtZero#Then": {
+                                      "do": [
+                                        {
+                                          "Javascript_CoupaUrl": {
+                                            "run": {
+                                              "script": {
+                                                "language": "javascript",
+                                                "code": "const start = $context.variables.windowStart; const end = $context.variables.windowEnd; const url = 'https://uipath-test.coupahost.com/invoices?q%5Binvoice_date_gteq%5D=' + start + '&q%5Binvoice_date_lteq%5D=' + end + '&q%5Bstatus_eq%5D=draft'; return { coupaUrl: url };",
+                                                "arguments": "${{ \"$context\": $context, \"$workflow\": $workflow, \"$input\": $input }}"
+                                              }
+                                            },
+                                            "export": {
+                                              "as": "{ ...$context, outputs: { ...$context?.outputs, \"Javascript_CoupaUrl\": $output } }"
+                                            },
+                                            "metadata": {
+                                              "activityType": "JsInvoke",
+                                              "displayName": "Build Coupa URL",
+                                              "fullName": "JsInvoke"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "Assign_CoupaUrl": {
+                                            "set": { "coupaUrl": "${$context.outputs.Javascript_CoupaUrl.coupaUrl}" },
+                                            "export": {
+                                              "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+                                            },
+                                            "metadata": {
+                                              "activityType": "Assign",
+                                              "displayName": "Set coupaUrl",
+                                              "fullName": "Assign",
+                                              "isTransparent": false
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "HTTP_Request_Slack": {
+                                            "call": "UiPath.Http",
+                                            "with": {
+                                              "connector": "uipath-uipath-http",
+                                              "connectionId": "43d506f7-7de2-4798-aac1-9522e2e45dbb",
+                                              "connectionResourceId": "43d506f7-7de2-4798-aac1-9522e2e45dbb",
+                                              "method": "POST",
+                                              "endpoint": "/http-request",
+                                              "bodyParameters": {
+                                                "authentication": "connector",
+                                                "targetConnector": "uipath-salesforce-slack",
+                                                "connection": "43d506f7-7de2-4798-aac1-9522e2e45dbb",
+                                                "method": "POST",
+                                                "path": "chat.postMessage",
+                                                "url": "chat.postMessage",
+                                                "body": "${{ channel: 'WLX9BD8FN', text: `:receipt: ${$context.variables.qualifyingCount} invoices from the last seven days have no purchase order linked`, blocks: [ { type: 'header', text: { type: 'plain_text', text: `:receipt: ${$context.variables.qualifyingCount} invoices need a purchase order`, emoji: true } }, { type: 'section', text: { type: 'mrkdwn', text: `:warning:  *${$context.variables.qualifyingCount} invoices* from the last seven days have no purchase order linked.\n:no_entry:  An invoice without a linked PO cannot be matched or paid under our *no-PO-no-pay policy*, and payment to the supplier stalls until it is fixed.\n:point_right:  Please make sure a purchase order exists for these invoices and is correctly linked to each one.` } }, { type: 'actions', elements: [ { type: 'button', text: { type: 'plain_text', text: 'Open the list in Coupa', emoji: true }, url: $context.variables.coupaUrl, style: 'primary' } ] }, { type: 'divider' }, { type: 'context', elements: [ { type: 'mrkdwn', text: `:calendar: Invoices dated *${$context.variables.windowStart}* to *${$context.variables.windowEnd}*  ·  :robot_face: No-PO Invoice Chaser  ·  checked *${$context.variables.runDate}*` } ] } ] }}"
+                                              }
+                                            },
+                                            "export": {
+                                              "as": "{ ...$context, outputs: { ...$context?.outputs, \"HTTP_Request_Slack\": $output } }"
+                                            },
+                                            "metadata": {
+                                              "activityType": "Connector",
+                                              "displayName": "HTTP Request: Slack",
+                                              "uiPathActivityTypeId": "5c4cc855-b42a-37e6-b910-de8588998fce",
+                                              "configuration": "{\"essentialConfiguration\":{\"connectorVersion\":\"1.4.44\",\"scriptRef\":null,\"customFieldsRequestDetails\":null,\"instanceParameters\":{\"connectorKey\":\"uipath-uipath-http\",\"objectName\":\"http-request\",\"httpMethod\":\"POST\",\"activityType\":\"Curated\",\"version\":\"1.0.0\",\"supportsStreaming\":false,\"subType\":\"method\"},\"objectName\":\"http-request\",\"operation\":\"create\",\"packageVersion\":\"1.0.0\",\"httpMethod\":\"POST\",\"path\":\"/http-request\",\"unifiedTypesCompatible\":true,\"savedJitInputFieldId\":\"in_http-request\"}}"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "If_SlackValid#Wrapper": {
+                                            "do": [
+                                              {
+                                                "If_SlackValid": {
+                                                  "switch": [
+                                                    {
+                                                      "case": {
+                                                        "when": "${$context.outputs.HTTP_Request_Slack.statusCode === 200 && $context.outputs.HTTP_Request_Slack.content.ok === true}",
+                                                        "then": "If_SlackValid#Then"
+                                                      }
+                                                    },
+                                                    {
+                                                      "default": {
+                                                        "then": "If_SlackValid#Else"
+                                                      }
+                                                    }
+                                                  ],
+                                                  "metadata": {
+                                                    "displayName": "Slack response ok?"
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "If_SlackValid#Then": {
+                                                  "do": [
+                                                    {
+                                                      "Response_Success_Notify": {
+                                                        "response": "${{ status: 'ok', invoice_count: $context.variables.qualifyingCount, slack_sent: true }}",
+                                                        "markJobAsFailed": false,
+                                                        "then": "end",
+                                                        "export": {
+                                                          "as": "{ ...$context, outputs: { ...$context?.outputs, \"Response_Success_Notify\": $output } }"
+                                                        },
+                                                        "metadata": {
+                                                          "activityType": "Response",
+                                                          "displayName": "Respond: success (notify)",
+                                                          "fullName": "Response"
+                                                        }
+                                                      }
+                                                    }
+                                                  ],
+                                                  "then": "exit"
+                                                }
+                                              },
+                                              {
+                                                "If_SlackValid#Else": {
+                                                  "do": [
+                                                    {
+                                                      "Assign_SlackErrMsg": {
+                                                        "set": { "errorMessage": "${'Slack chat.postMessage failed: statusCode=' + $context.outputs.HTTP_Request_Slack.statusCode + ' ok=' + ($context.outputs.HTTP_Request_Slack.content && $context.outputs.HTTP_Request_Slack.content.ok)}" },
+                                                        "export": {
+                                                          "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+                                                        },
+                                                        "metadata": {
+                                                          "activityType": "Assign",
+                                                          "displayName": "Set Slack error message",
+                                                          "fullName": "Assign",
+                                                          "isTransparent": false
+                                                        }
+                                                      }
+                                                    },
+                                                    {
+                                                      "Response_Failed_Slack": {
+                                                        "response": "${{ status: 'failed', invoice_count: $context.variables.qualifyingCount, slack_sent: false, error_message: $context.variables.errorMessage }}",
+                                                        "markJobAsFailed": true,
+                                                        "then": "end",
+                                                        "export": {
+                                                          "as": "{ ...$context, outputs: { ...$context?.outputs, \"Response_Failed_Slack\": $output } }"
+                                                        },
+                                                        "metadata": {
+                                                          "activityType": "Response",
+                                                          "displayName": "Respond: failed (Slack)",
+                                                          "fullName": "Response"
+                                                        }
+                                                      }
+                                                    }
+                                                  ],
+                                                  "then": "exit"
+                                                }
+                                              }
+                                            ],
+                                            "export": {
+                                              "as": "{ ...$context, outputs: { ...$context?.outputs, \"If_SlackValid\": $output } }"
+                                            },
+                                            "metadata": {
+                                              "activityType": "If",
+                                              "displayName": "If: Slack valid",
+                                              "fullName": "If"
+                                            }
+                                          }
+                                        }
+                                      ],
+                                      "then": "exit"
+                                    }
+                                  },
+                                  {
+                                    "If_CountGtZero#Else": {
+                                      "do": [
+                                        {
+                                          "Response_CleanDay": {
+                                            "response": "${{ status: 'ok', invoice_count: 0, slack_sent: false }}",
+                                            "markJobAsFailed": false,
+                                            "then": "end",
+                                            "export": {
+                                              "as": "{ ...$context, outputs: { ...$context?.outputs, \"Response_CleanDay\": $output } }"
+                                            },
+                                            "metadata": {
+                                              "activityType": "Response",
+                                              "displayName": "Respond: clean day",
+                                              "fullName": "Response"
+                                            }
+                                          }
+                                        }
+                                      ],
+                                      "then": "exit"
+                                    }
+                                  }
+                                ],
+                                "export": {
+                                  "as": "{ ...$context, outputs: { ...$context?.outputs, \"If_CountGtZero\": $output } }"
+                                },
+                                "metadata": {
+                                  "activityType": "If",
+                                  "displayName": "If: count > 0",
+                                  "fullName": "If"
+                                }
+                              }
+                            }
+                          ],
+                          "then": "exit"
+                        }
+                      },
+                      {
+                        "If_CoupaValid#Else": {
+                          "do": [
+                            {
+                              "Assign_CoupaErrMsg": {
+                                "set": { "errorMessage": "${'Coupa query failed: statusCode=' + $context.outputs.HTTP_Request_Coupa.statusCode}" },
+                                "export": {
+                                  "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+                                },
+                                "metadata": {
+                                  "activityType": "Assign",
+                                  "displayName": "Set Coupa error message",
+                                  "fullName": "Assign",
+                                  "isTransparent": false
+                                }
+                              }
+                            },
+                            {
+                              "Response_Failed_Coupa": {
+                                "response": "${{ status: 'failed', error_message: $context.variables.errorMessage }}",
+                                "markJobAsFailed": true,
+                                "then": "end",
+                                "export": {
+                                  "as": "{ ...$context, outputs: { ...$context?.outputs, \"Response_Failed_Coupa\": $output } }"
+                                },
+                                "metadata": {
+                                  "activityType": "Response",
+                                  "displayName": "Respond: failed (Coupa)",
+                                  "fullName": "Response"
+                                }
+                              }
+                            }
+                          ],
+                          "then": "exit"
+                        }
+                      }
+                    ],
+                    "export": {
+                      "as": "{ ...$context, outputs: { ...$context?.outputs, \"If_CoupaValid\": $output } }"
+                    },
+                    "metadata": {
+                      "activityType": "If",
+                      "displayName": "If: Coupa response valid",
+                      "fullName": "If"
+                    }
+                  }
+                }
+              ],
+              "catch": {
+                "as": "error",
+                "do": [
+                  {
+                    "Assign_CatchErrMsg": {
+                      "set": { "errorMessage": "${$error.message || $error.title || 'Unhandled runtime exception'}" },
+                      "export": {
+                        "as": "{ ...$context, variables: { ...$context.variables, ...$output } }"
+                      },
+                      "metadata": {
+                        "activityType": "Assign",
+                        "displayName": "Capture exception message",
+                        "fullName": "Assign",
+                        "isTransparent": false
+                      }
+                    }
+                  },
+                  {
+                    "Response_Failed_Unhandled": {
+                      "response": "${{ status: 'failed', error_message: $context.variables.errorMessage }}",
+                      "markJobAsFailed": true,
+                      "then": "end",
+                      "export": {
+                        "as": "{ ...$context, outputs: { ...$context?.outputs, \"Response_Failed_Unhandled\": $output } }"
+                      },
+                      "metadata": {
+                        "activityType": "Response",
+                        "displayName": "Respond: failed (unhandled)",
+                        "fullName": "Response"
+                      }
+                    }
+                  }
+                ]
+              },
+              "export": {
+                "as": "{ ...$context, outputs: { ...$context?.outputs, \"Try_Catch_1\": $output } }"
+              },
+              "metadata": {
+                "activityType": "TryCatch",
+                "displayName": "Main workflow with error boundary",
+                "fullName": "TryCatch"
+              }
+            }
+          }
+        ],
+        "metadata": {
+          "activityType": "Sequence",
+          "displayName": "Sequence",
+          "fullName": "Sequence"
+        }
+      }
+    }
+  ],
+  "evaluate": {
+    "mode": "strict",
+    "language": "javascript"
+  }
+}
